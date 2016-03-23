@@ -45,7 +45,7 @@ EXEMIC = $(EXECUTABLE).MIC
 EXEDBG_MIC = $(EXEDBG).MIC
 EXEPRO_MIC = $(EXEPRO).MIC
 
-all: world world_mic
+all: release
 
 release_all: release release_mic
 
