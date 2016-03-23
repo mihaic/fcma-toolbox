@@ -3,6 +3,7 @@
  Copyright (c) 2013 the authors (see AUTHORS file)
  For license terms, please see the LICENSE file.
  */
+#include <cstdlib>
 #include <iostream>
 #include <sstream>
 #include <mpi.h>
