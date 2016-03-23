@@ -4,3 +4,6 @@ pni_fcma*
 !Make.user.osx
 !Make.user.linux
 *.optrpt
+*.o
+*.o.MIC
+*.swp
