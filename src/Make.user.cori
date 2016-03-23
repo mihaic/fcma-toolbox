@@ -7,8 +7,8 @@ BLASINCLUDE = -I/opt/intel/mkl/include
 BLASCFLAGS = -DUSE_MKL -qopt-report-phase=vec -DCMM_INT_IS_LONG #-vec-report=1
 BLASLIBINC = -L/opt/intel/mkl/lib/intel64 -L/opt/intel/lib/intel64
 BLASLDFLAGS = -mkl=parallel
-OTHER_INCLUDES = -I$(HDF5_INCLUDE_OPTS) -I/global/homes/m/mihaic/Surse/svm-simple -I/global/homes/m/mihaic/Surse/svm-phi
-OTHER_LDFLAGS = -L$(HDF5_DIR)/lib -L/global/homes/m/mihaic/Surse/svm-simple -lsimplesvm -L/global/homes/m/mihaic/Surse/svm-phi -lphisvm
+OTHER_INCLUDES = -I$(HDF5_INCLUDE_OPTS) -I$(BOOST_DIR)/include -I$(SVM_SIMPLE_DIR) -I$(SVM_PHI_DIR)
+OTHER_LDFLAGS = -L$(HDF5_DIR)/lib -L$(SVM_SIMPLE_DIR) -lsimplesvm -L$(SVM_PHI_DIR) -lphisvm
 OTHER_LDFLAGS_MIC = -L/global/homes/m/mihaic/Surse/svm-simple -lsimplesvm.MIC -L/global/homes/m/mihaic/Surse/svm-phi -lphisvm.MIC
 BOOSTLIBINC = -L$(BOOST_LIB) -lboost_serialization -lboost_iostreams
 MPICC = mpiicpc
