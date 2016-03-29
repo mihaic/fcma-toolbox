@@ -401,15 +401,13 @@ void run_fcma(Param* param) {
   RawMatrix** r_matrices = NULL;
   RawMatrix** r_matrices2 = NULL;
 #ifndef __MIC__
-  if (me == 0) {
-    r_matrices = ReadGzDirectory(fmri_directory, fmri_file_type,
-                                 nSubs);  // set nSubs here
-    if (fmri_directory2) {
-      r_matrices2 = ReadGzDirectory(fmri_directory2, fmri_file_type,
-                                    nSubs);  // set nSubs here
-    } else {
-      r_matrices2 = r_matrices;
-    }
+  r_matrices = ReadGzDirectory(fmri_directory, fmri_file_type,
+                               nSubs);  // set nSubs here
+  if (fmri_directory2) {
+    r_matrices2 = ReadGzDirectory(fmri_directory2, fmri_file_type,
+                                  nSubs);  // set nSubs here
+  } else {
+    r_matrices2 = r_matrices;
   }
 #endif
   MPI_Bcast((void*)&nSubs, 1, MPI_INT, 0, MPI_COMM_WORLD);

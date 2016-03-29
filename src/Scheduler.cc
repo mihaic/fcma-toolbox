@@ -33,82 +33,31 @@ void Scheduler(int me, int nprocs, int step, RawMatrix** r_matrices,
 
 #ifndef __MIC__
   if (me == 0) {
-    //WaitForDebugAttach();
     tstart = MPI_Wtime();
-    GenerateMaskedMatrices(nSubs, r_matrices, r_matrices2, mask_file1, mask_file2, 
-          &masked_matrices1, &masked_matrices2);
+  }
 
-    if (shuffle == 1 || shuffle == 2) {
-      unsigned int seed = (unsigned int)time(NULL);
-      MatrixPermutation(masked_matrices1, nSubs, seed, permute_book_file);
-      MatrixPermutation(masked_matrices2, nSubs, seed, permute_book_file);
-    }
-    td1 = PreprocessMatrices(masked_matrices1, trials, nSubs, nTrials);
-    td2 = PreprocessMatrices(masked_matrices2, trials, nSubs, nTrials);
+  GenerateMaskedMatrices(nSubs, r_matrices, r_matrices2, mask_file1, mask_file2, 
+        &masked_matrices1, &masked_matrices2);
+
+  if (shuffle == 1 || shuffle == 2) {
+    unsigned int seed = (unsigned int)time(NULL);
+    MatrixPermutation(masked_matrices1, nSubs, seed, permute_book_file);
+    MatrixPermutation(masked_matrices2, nSubs, seed, permute_book_file);
+  }
+  td1 = PreprocessMatrices(masked_matrices1, trials, nSubs, nTrials);
+  td2 = PreprocessMatrices(masked_matrices2, trials, nSubs, nTrials);
+#endif
+
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  if (me == 0) {
     tstop = MPI_Wtime();
     cout.precision(6);
     cout << "data mask applying time: " << tstop - tstart << "s" << endl;
   }
-#endif
 
-  tstart = MPI_Wtime();
-  if (me != 0) {
-    td1 = new TrialData(-1, -1);
-    td2 = new TrialData(-1, -1);
-  }
-  MPI_Bcast((void*)td1, sizeof(TrialData), MPI_CHAR, 0, MPI_COMM_WORLD);
-  MPI_Bcast((void*)td2, sizeof(TrialData), MPI_CHAR, 0, MPI_COMM_WORLD);
-  if (me != 0) {
-    td1->trialLengths = new int[td1->nTrials];
-    td2->trialLengths = new int[td2->nTrials];
-    td1->scs = new int[td1->nTrials];
-    td2->scs = new int[td2->nTrials];
-    size_t dataSize = sizeof(float) * (size_t)td1->nCols * (size_t)td1->nVoxels;
-    //td1->data = (float*)_mm_malloc(
-    //    sizeof(float) * (size_t)td1->nCols * (size_t)td1->nVoxels, 64);
-    td1->data = (float*)malloc(dataSize);
-    assert(td1->data);
-    //td2->data = (float*)_mm_malloc(
-    //    sizeof(float) * (size_t)td2->nCols * (size_t)td2->nVoxels, 64);
-    dataSize = sizeof(float) * (size_t)td2->nCols * (size_t)td2->nVoxels;
-    td2->data = (float*)malloc(dataSize);
-    assert(td2->data);
-  }
-  /*if (me==0) { //output for real-time paper
-    FILE* fp = fopen("facesceneNorm_Acti.bin", "wb");
-    fwrite ((const void*)td1->data, sizeof(float), (size_t)td1->nCols * (size_t)td1->nVoxels, fp);
-    fclose(fp);
-    exit(1);
-  }*/
-  MPI_Bcast((void*)(td1->trialLengths), td1->nTrials, MPI_INT, 0,
-            MPI_COMM_WORLD);
-  MPI_Bcast((void*)(td2->trialLengths), td2->nTrials, MPI_INT, 0,
-            MPI_COMM_WORLD);
-  MPI_Bcast((void*)(td1->scs), td1->nTrials, MPI_INT, 0, MPI_COMM_WORLD);
-  MPI_Bcast((void*)(td2->scs), td2->nTrials, MPI_INT, 0, MPI_COMM_WORLD);
-
-  // Since can be too much data for a single send (max 2^31 elements or 4GB)
-  // send as a series of trials
-  // (voxels*trs_per_trial per send , for nSubs*numblocks sends)
-  float* d1ptr = td1->data;
-  float* d2ptr = td2->data;
-  for (int t = 0; t < nTrials; t++) {
-    size_t dataChunk1 = td1->trialLengths[t] * (size_t)td1->nVoxels;
-    assert(dataChunk1 < (size_t)INT_MAX);
-    size_t dataChunk2 = td2->trialLengths[t] * (size_t)td2->nVoxels;
-    assert(dataChunk2 < (size_t)INT_MAX);
-    MPI_Bcast((void*)d1ptr, (int)dataChunk1, MPI_FLOAT, 0, MPI_COMM_WORLD);
-    MPI_Bcast((void*)d2ptr, (int)dataChunk2, MPI_FLOAT, 0, MPI_COMM_WORLD);
-    d1ptr += dataChunk1;
-    d2ptr += dataChunk2;
-  }
-
-  MPI_Barrier(MPI_COMM_WORLD);
-
-  tstop = MPI_Wtime();
   if (me == 0) {
     cout.precision(6);
-    cout << "data transferring time: " << tstop - tstart << "s" << endl;
     cout << "#voxels for mask 1: " << masked_matrices1[0]->row << endl;
     cout << "#voxels for mask 2: " << masked_matrices2[0]->row << endl;
     DoMaster(nprocs, step, masked_matrices1[0]->row, output_file, mask_file1);
