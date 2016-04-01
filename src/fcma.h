@@ -21,6 +21,7 @@ typedef struct param_t {
   const char* block_information_directory;
   const char* mask_file1;
   const char* mask_file2;
+  const char* subjects_file;
   int step;
   const char* output_file;
   int leave_out_id;
@@ -32,6 +33,7 @@ typedef struct param_t {
   int isUsingMaskFile;
   int isQuietMode;
   int shuffle;
+  int trs_per_subject;
   const char* permute_book_file;
 } Param;
 

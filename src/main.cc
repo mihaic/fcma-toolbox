@@ -268,7 +268,10 @@ void parse_command_line(int argc, char** argv) {
       KEY_DEF(FCMA_FIRST_MASKFILE, "first_maskfile"),                   \
       KEY_DEF(FCMA_SECOND_MASKFILE, "second_maskfile"),                 \
       KEY_DEF(FCMA_VISUALIZE_BLOCKID, "visualize_blockid"),             \
-      KEY_DEF(FCMA_VISUALIZE_REFERENCE, "visualize_reference")
+      KEY_DEF(FCMA_VISUALIZE_REFERENCE, "visualize_reference"),         \
+      KEY_DEF(FCMA_TRS_PER_SUBJECT, "trs_per_subject"),                 \
+      KEY_DEF(FCMA_SUBJECTS_FILE, "subjects_file")
+
 
 #define KEY_DEF(identifier, name) identifier
 enum keys {
@@ -277,7 +280,7 @@ enum keys {
 
 enum {
   FCMA_FIRSTKEY = FCMA_DATADIR,
-  FCMA_LASTKEY = FCMA_VISUALIZE_REFERENCE,
+  FCMA_LASTKEY = FCMA_SUBJECTS_FILE,
   FCMA_NUM_KEYS = FCMA_LASTKEY + 1
 };
 
@@ -338,6 +341,12 @@ static void params_from_keyvalues(char** keys_and_values,
           case FCMA_VISUALIZE_BLOCKID:
             Parameters.visualized_block_id = atoi(keys_and_values[v]);
             break;
+          case FCMA_TRS_PER_SUBJECT:
+            Parameters.trs_per_subject = atoi(keys_and_values[v]);
+            break;
+          case FCMA_SUBJECTS_FILE:
+            Parameters.subjects_file = keys_and_values[v];
+            break;
           default:
             break;
         }
@@ -378,6 +387,7 @@ void run_fcma(Param* param) {
   const char* output_file = param->output_file;
   const char* mask_file1 = param->mask_file1;
   const char* mask_file2 = param->mask_file2;
+  const char* subjects_file = param->subjects_file;
   int leave_out_id = param->leave_out_id;
   int nHolds =
       param->nHolds;  // the number of trials that being held from the analysis
@@ -385,6 +395,7 @@ void run_fcma(Param* param) {
   int visualized_block_id = param->visualized_block_id;
   int is_quiet_mode = param->isQuietMode;
   int shuffle = param->shuffle;
+  int trs_per_subject = param->trs_per_subject;
   const char* permute_book_file = param->permute_book_file;
   /* setting done */
   /* ---------------------------------------------- */
@@ -401,8 +412,15 @@ void run_fcma(Param* param) {
   RawMatrix** r_matrices = NULL;
   RawMatrix** r_matrices2 = NULL;
 #ifndef __MIC__
-  r_matrices = ReadGzDirectory(fmri_directory, fmri_file_type,
-                               nSubs);  // set nSubs here
+  if (subjects_file != NULL) {
+    //std::cout << "Reading subjects" << std::endl;
+    r_matrices = ReadSubjects(subjects_file, trs_per_subject, fmri_directory,
+                              fmri_file_type, nSubs);
+  } else {
+    //std::cout << "Reading directory" << std::endl;
+    r_matrices = ReadGzDirectory(fmri_directory, fmri_file_type,
+                                 nSubs);  // set nSubs here
+  }
   if (fmri_directory2) {
     r_matrices2 = ReadGzDirectory(fmri_directory2, fmri_file_type,
                                   nSubs);  // set nSubs here
@@ -424,27 +442,23 @@ void run_fcma(Param* param) {
 #endif
   Trial* trials = NULL;
 #ifndef __MIC__
-  if (me == 0) {
-    if (block_information_file != NULL) {
-      trials = GenRegularTrials(nSubs, 0, nTrials,
-                                block_information_file);  // 0 for no shift,
-                                                          // nTrials is assigned
-                                                          // a value here
-    } else {
-      trials = GenBlocksFromDir(nSubs, 0, nTrials, r_matrices,
-                                block_information_directory);  // 0 for no
-                                                               // shift, nTrials
-                                                               // is assigned a
-                                                               // value here
-    }
+  if (block_information_file != NULL) {
+    trials = GenRegularTrials(nSubs, 0, nTrials,
+                              block_information_file);  // 0 for no shift,
+                                                        // nTrials is assigned
+                                                        // a value here
+  } else {
+    trials = GenBlocksFromDir(nSubs, 0, nTrials, r_matrices,
+                              block_information_directory);  // 0 for no
+                                                             // shift, nTrials
+                                                             // is assigned a
+                                                             // value here
   }
+  std::vector<Trial> trials_vector = FilterTrials(trials, nTrials,
+                                                  trs_per_subject);
+  trials = trials_vector.data();
+  nTrials = trials_vector.size();
 #endif
-  MPI_Bcast((void*)&nTrials, 1, MPI_INT, 0, MPI_COMM_WORLD);
-  if (me != 0) {
-    trials = new Trial[nTrials];
-  }
-  MPI_Bcast((void*)trials, sizeof(Trial) * nTrials, MPI_CHAR, 0,
-            MPI_COMM_WORLD);
   if (me == 0) {
     cout << "blocks generation done! " << nTrials << " in total." << endl;
     cout << "blocks in the training set: " << nTrials - nHolds << endl;
@@ -648,6 +662,7 @@ int main(int argc, char** argv) {
   // total_count=0;
   // raise(SIGSTOP); //xcode attach to process
   // kmp_set_defaults("KMP_AFFINITY=scatter");
+  MPI_Init(NULL, NULL);
   if (argc > 1 && !strcmp(argv[1], "info")) {
 
     FCSIZE_INFO(char);

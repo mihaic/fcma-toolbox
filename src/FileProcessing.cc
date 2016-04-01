@@ -14,6 +14,151 @@
 #include "ErrorHandling.h"
 #include <hdf5.h>
 #include <hdf5_hl.h>
+#include <algorithm>
+#include <ctime>
+#include <iomanip>
+
+/*************************
+Read input files using a list of subjects
+
+Input: file path for list of subjects file; number of TRs per subject; path for directory holding input data files for each TR; extension of input files.
+
+Output: array of RawMatrix structs, number of subjects
+**************************/
+RawMatrix** ReadSubjects(const char* subjects_file, int trs_per_subject, const
+                         char* dir_path, const char* filetype, int& nSubs) {
+  std::vector<std::string> subjects;
+  std::vector<int> idxs;
+  std::ifstream fin(subjects_file);
+  std::string line;
+  int idx = 0;
+  while (std::getline(fin, line)) {
+    subjects.push_back(line);
+    idxs.push_back(idx++);
+  }
+  nSubs = subjects.size();
+
+  std::srand(std::time(0));
+  std::random_shuffle(idxs.begin(), idxs.end());
+
+  RawMatrix** r_matrices = new RawMatrix* [nSubs];
+  for (int i: idxs) {
+    //std::cout << "Reading subject " << i << std::endl;
+    r_matrices[i] = ReadSubject(subjects[i], trs_per_subject, dir_path,
+                                filetype);
+    r_matrices[i]->sid = i;
+  }
+  return r_matrices;
+}
+
+/*************************
+Read input files for a subject
+
+Input: subject name; number of TRs per subject; path for directory holding input data files for each TR; extension of input files.
+
+Output: RawMatrix struct
+**************************/
+RawMatrix* ReadSubject(std::string subject, int trs_per_subject, const
+                       char* dir_path, const char* filetype) {
+  std::vector<int> trs(trs_per_subject);
+  std::vector<int> idxs(trs_per_subject);
+  for (int i = 0; i < trs_per_subject; i++) {
+    trs[i] = i;
+    idxs[i] = i;
+  }
+
+  std::srand(std::time(0));
+  std::random_shuffle(idxs.begin(), idxs.end());
+
+  RawMatrix* r_matrix = new RawMatrix();
+  r_matrix->sname = subject.c_str();
+  r_matrix->col = trs_per_subject;
+
+  int matrix_initialized = 0;
+  for (int idx: idxs) {
+    int tr = trs[idx];
+    std::string dir_path_string(dir_path);
+    std::stringstream tr_stream;
+    // FIXME make padding configurable
+    tr_stream << std::setw(4) << std::setfill('0') << tr;
+    std::string filetype_string(filetype);
+    // FIXME make separator configurable
+    std::string file_path = dir_path_string + subject + "_" + tr_stream.str() +
+                            filetype_string;
+
+    //std::cout <<  "Reading Nifti " << file_path << std::endl;
+    const char* file = file_path.c_str();
+    nifti_image* nim;
+    nim = nifti_image_read(file, 1);
+    if (nim == NULL) {
+      FATAL("file not found: " << file);
+    }
+    assert(nim);
+
+    if (!matrix_initialized) {
+      r_matrix->row = nim->nx * nim->ny * nim->nz;
+      r_matrix->nx = nim->nx;
+      r_matrix->ny = nim->ny;
+      r_matrix->nz = nim->nz;
+      r_matrix->matrix = new float[r_matrix->row * r_matrix->col];
+      matrix_initialized = 1;
+    }
+
+    short* data_short = NULL;
+    unsigned short* data_ushort = NULL;
+    int* data_int = NULL;
+    float* data_float = NULL;
+    double* data_double = NULL;
+    switch (nim->datatype)  // now only get one type
+    {
+      case DT_SIGNED_SHORT:
+        data_short = (short*)nim->data;
+        break;
+      case DT_UINT16:
+        data_ushort = (unsigned short*)nim->data;
+        break;
+      case DT_SIGNED_INT:
+        data_int = (int*)nim->data;
+        break;
+      case DT_FLOAT:
+        data_float = (float*)nim->data;
+        break;
+      case DT_FLOAT64:
+        data_double = (double*)nim->data;
+        break;
+      default:
+        FATAL("wrong data type of data file! " << nim->datatype);
+    }
+#pragma omp parallel for
+    // the follow if statements don't harm the performance, it's no significant
+    // benifit to put the follow ifs to the previous switch
+    for (int i = 0; i < r_matrix->row; i++) {
+      if (data_short != NULL) {
+        r_matrix->matrix[tr * r_matrix->col + i] =
+            (float)data_short[i];
+      }
+      if (data_ushort != NULL) {
+        r_matrix->matrix[tr * r_matrix->col + i] =
+            (float)data_ushort[i];
+      }
+      if (data_int != NULL) {
+        r_matrix->matrix[tr * r_matrix->col + i] =
+            (float)data_int[i];
+      }
+      if (data_float != NULL) {
+        r_matrix->matrix[tr * r_matrix->col + i] =
+            (float)data_float[i];
+      }
+      if (data_double != NULL) {
+        r_matrix->matrix[tr * r_matrix->col + i] =
+            (float)data_double[i];
+      }
+    }
+    nifti_image_free(nim);
+  }
+
+  return r_matrix;
+}
 
 /*************************
 read a bunch of raw matrix files
@@ -613,6 +758,23 @@ Trial* GenBlocksFromDir(int nSubs, int nShift, int& nTrials,
     nTrials += nPerSubs;
   }
   return trials;
+}
+
+/***************************
+Filter trials by keeping only the ones concerning the first trs_per_subject
+
+Input: array of Trials to filter; number of input trials; number of TRs per subject.
+Output: vector of Trials.
+****************************/
+std::vector<Trial> FilterTrials(Trial* trials, int nTrials, int
+                                trs_per_subject) {
+  std::vector<Trial> result;
+  for (int i = 0; i < nTrials; i++) {
+    if (trials[i].ec < trs_per_subject) {
+      result.push_back(trials[i]);
+    }
+  }
+  return result;
 }
 
 /***************************

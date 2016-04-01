@@ -7,6 +7,10 @@
 #include <cstring>
 #include "common.h"
 
+RawMatrix** ReadSubjects(const char* subjects_file, int trs_per_subject, const
+                         char* dir_path, const char* filetype, int& nSubs);
+RawMatrix* ReadSubject(std::string subject, int trs_per_subject, const
+                       char* dir_path, const char* filetype);
 RawMatrix** ReadGzDirectory(const char* filepath, const char* filetype,
                             int& nSubs);
 RawMatrix* ReadGzData(std::string fileStr, int sid);
@@ -21,6 +25,8 @@ VoxelXYZ* GetMaskedPts(VoxelXYZ* pts, int nMaskedVoxels, const char* maskFile);
 Trial* GenRegularTrials(int nSubs, int nShift, int& nTrials, const char* file);
 Trial* GenBlocksFromDir(int nSubs, int nShift, int& nTrials,
                         RawMatrix** r_matrices, const char* dir);
+std::vector<Trial> FilterTrials(Trial* trials, int nTrials, int
+                                trs_per_subject);
 VoxelXYZ* ReadLocInfo(const char* file);
 VoxelXYZ* ReadLocInfoFromNii(RawMatrix* r_matrix);
 double** ReadRTMatrices(const char* file, int& nSubs);
